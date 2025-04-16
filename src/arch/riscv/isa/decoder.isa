@@ -549,6 +549,7 @@ decode QUADRANT default Unknown::unknown() {
         }
     }
     0x3: decode OPCODE5 {
+
         0x00: decode FUNCT3 {
             format Load {
                 0x0: lb({{
@@ -4921,6 +4922,11 @@ decode QUADRANT default Unknown::unknown() {
             }}, IsIndirectControl, IsUncondControl);
         }
 
+        0x1E: JOp::runahead_trigger({{
+            Rd = rvSext(NPC);
+            NPC = rvSext(PC + imm);
+        }}, IsDirectControl, IsUncondControl);
+
         0x1b: JOp::jal({{
             Rd = rvSext(NPC);
             NPC = rvSext(PC + imm);
@@ -5087,3 +5093,4 @@ decode QUADRANT default Unknown::unknown() {
         0x1e: M5Op::M5Op();
     }
 }
+
