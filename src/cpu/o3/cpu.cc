@@ -154,6 +154,9 @@ CPU::CPU(const BaseO3CPUParams &params)
     iew.setActiveThreads(&activeThreads);
     commit.setActiveThreads(&activeThreads);
 
+    // // Only Thread 0 active at the beginning
+    // activeThreads.push_back(0);
+
     // Give each of the stages the time buffer they will use.
     fetch.setTimeBuffer(&timeBuffer);
     decode.setTimeBuffer(&timeBuffer);
@@ -244,6 +247,7 @@ CPU::CPU(const BaseO3CPUParams &params)
     // Initialize rename map to assign physical registers to the
     // architectural registers for active threads only.
     for (ThreadID tid = 0; tid < active_threads; tid++) {
+    // for (ThreadID tid = 0; tid <= 0; tid++) {
         for (auto type = (RegClassType)0; type <= CCRegClass;
                 type = (RegClassType)(type + 1)) {
             for (auto &id: *regClasses.at(type)) {

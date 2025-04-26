@@ -95,6 +95,7 @@ system.cpu_voltage_domain = VoltageDomain()
 system.cpu_clk_domain = SrcClockDomain(clock=args.cpu_clock, voltage_domain=system.cpu_voltage_domain)
 
 for cpu in system.cpu:
+    cpu.numThreads = 2
     cpu.clk_domain = system.cpu_clk_domain
 
 if ObjectList.is_kvm_cpu(CPUClass):
@@ -103,8 +104,6 @@ if ObjectList.is_kvm_cpu(CPUClass):
 for i in range(np):
     if args.smt:
         system.cpu[i].workload = multiprocesses
-    elif len(multiprocesses) == 1:
-        system.cpu[i].workload = multiprocesses[0]
     else:
         system.cpu[i].workload = multiprocesses[i]
     system.cpu[i].createThreads()

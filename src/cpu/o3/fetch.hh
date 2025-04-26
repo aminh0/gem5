@@ -349,7 +349,7 @@ class Fetch
      * @param status_change fetch() sets this variable if there was a status
      * change (ie switching to IcacheMissStall).
      */
-    void fetch(bool &status_change);
+    void  fetch(bool &status_change);
 
     /** Align a PC to the start of a fetch buffer block. */
     Addr fetchBufferAlignPC(Addr addr)
@@ -434,6 +434,14 @@ class Fetch
 
     /** Tracks how many instructions has been fetched this cycle. */
     int numInst;
+
+    std::array<bool, MaxThreads> runaheadMode = {false};
+    std::array<int, MaxThreads> runaheadFetchedCount = {0};
+    std::array<Addr, MaxThreads> loopExitPC = {0};
+    std::array<Addr, MaxThreads> currentRunaheadPC = {0};
+
+    /** The loop start PC to fetch from during runahead. */
+    Addr loopStartPC = 0;
 
     /** Source of possible stalls. */
     struct Stalls

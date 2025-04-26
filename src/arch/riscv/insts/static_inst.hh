@@ -103,6 +103,8 @@ class RiscvStaticInst : public StaticInst
     {
         return simpleAsBytes(buf, size, machInst);
     }
+
+    size_t instSize() const { return _size; } // in bytes
 };
 
 /**
