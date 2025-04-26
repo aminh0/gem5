@@ -424,6 +424,8 @@ class Fetch
     /** Can the fetch stage redirect from an interrupt on this instruction? */
     bool delayedCommit[MaxThreads];
 
+    bool runaheadTriggered = false;
+
     /** Memory request used to access cache. */
     RequestPtr memReq[MaxThreads];
 
@@ -520,6 +522,8 @@ class Fetch
 
     /** Number of threads that are actively fetching. */
     ThreadID numFetchingThreads;
+
+    ThreadID pendingSuspendThread = InvalidThreadID;
 
     /** Thread ID being fetched. */
     ThreadID threadFetched;

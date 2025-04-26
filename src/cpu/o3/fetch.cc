@@ -1,358 +1,4 @@
 
-// #include "cpu/o3/fetch.hh"
-// #include "cpu/thread_context.hh"
-
-// #include <algorithm>
-// #include <cstring>
-// #include <list>
-// #include <map>
-// #include <queue>
-
-// #include "arch/generic/tlb.hh"
-// #include "base/types.hh"
-// #include "cpu/base.hh"
-// #include "cpu/exetrace.hh"
-// #include "cpu/nop_static_inst.hh"
-// #include "cpu/o3/cpu.hh"
-// #include "cpu/o3/dyn_inst.hh"
-// #include "cpu/o3/limits.hh"
-// #include "debug/Activity.hh"
-// #include "debug/Drain.hh"
-// #include "debug/Fetch.hh"
-// #include "debug/O3CPU.hh"
-// #include "debug/O3PipeView.hh"
-// #include "mem/packet.hh"
-// #include "params/BaseO3CPU.hh"
-// #include "sim/byteswap.hh"
-// #include "sim/core.hh"
-// #include "sim/eventq.hh"
-// #include "sim/full_system.hh"
-// #include "sim/system.hh"
-
-// #include "arch/riscv/insts/static_inst.hh"
-
-// namespace gem5
-// {
-
-// namespace o3
-// {
-
-// Fetch::IcachePort::IcachePort(Fetch *_fetch, CPU *_cpu) :
-//         RequestPort(_cpu->name() + ".icache_port"), fetch(_fetch)
-// {}
-
-
-// Fetch::Fetch(CPU *_cpu, const BaseO3CPUParams &params)
-//     : fetchPolicy(params.smtFetchPolicy),
-//       cpu(_cpu),
-//       branchPred(nullptr),
-//       decodeToFetchDelay(params.decodeToFetchDelay),
-//       renameToFetchDelay(params.renameToFetchDelay),
-//       iewToFetchDelay(params.iewToFetchDelay),
-//       commitToFetchDelay(params.commitToFetchDelay),
-//       fetchWidth(params.fetchWidth),
-//       decodeWidth(params.decodeWidth),
-//       retryPkt(NULL),
-//       retryTid(InvalidThreadID),
-//       cacheBlkSize(cpu->cacheLineSize()),
-//       fetchBufferSize(params.fetchBufferSize),
-//       fetchBufferMask(fetchBufferSize - 1),
-//       fetchQueueSize(params.fetchQueueSize),
-//       numThreads(params.numThreads),
-//       numFetchingThreads(params.smtNumFetchingThreads),
-//       icachePort(this, _cpu),
-//       finishTranslationEvent(this), fetchStats(_cpu, this)
-// {
-//     if (numThreads > MaxThreads)
-//         fatal("numThreads (%d) is larger than compiled limit (%d),\n"
-//               "\tincrease MaxThreads in src/cpu/o3/limits.hh\n",
-//               numThreads, static_cast<int>(MaxThreads));
-//     if (fetchWidth > MaxWidth)
-//         fatal("fetchWidth (%d) is larger than compiled limit (%d),\n"
-//              "\tincrease MaxWidth in src/cpu/o3/limits.hh\n",
-//              fetchWidth, static_cast<int>(MaxWidth));
-//     if (fetchBufferSize > cacheBlkSize)
-//         fatal("fetch buffer size (%u bytes) is greater than the cache "
-//               "block size (%u bytes)\n", fetchBufferSize, cacheBlkSize);
-//     if (cacheBlkSize % fetchBufferSize)
-//         fatal("cache block (%u bytes) is not a multiple of the "
-//               "fetch buffer (%u bytes)\n", cacheBlkSize, fetchBufferSize);
-
-//     for (int i = 0; i < MaxThreads; i++) {
-//         fetchStatus[i] = Idle;
-//         decoder[i] = nullptr;
-//         pc[i].reset(params.isa[0]->newPCState());
-//         fetchOffset[i] = 0;
-//         macroop[i] = nullptr;
-//         delayedCommit[i] = false;
-//         memReq[i] = nullptr;
-//         stalls[i] = {false, false};
-//         fetchBuffer[i] = NULL;
-//         fetchBufferPC[i] = 0;
-//         fetchBufferValid[i] = false;
-//         lastIcacheStall[i] = 0;
-//         issuePipelinedIfetch[i] = false;
-//     }
-
-//     branchPred = params.branchPred;
-
-//     for (ThreadID tid = 0; tid < numThreads; tid++) {
-//         decoder[tid] = params.decoder[tid];
-//         // Create space to buffer the cache line data,
-//         // which may not hold the entire cache line.
-//         fetchBuffer[tid] = new uint8_t[fetchBufferSize];
-//     }
-
-//     // Get the size of an instruction.
-//     instSize = decoder[0]->moreBytesSize();
-// }
-
-// std::string Fetch::name() const { return cpu->name() + ".fetch"; }
-
-// void
-// Fetch::regProbePoints()
-// {
-//     ppFetch = new ProbePointArg<DynInstPtr>(cpu->getProbeManager(), "Fetch");
-//     ppFetchRequestSent = new ProbePointArg<RequestPtr>(cpu->getProbeManager(),
-//                                                        "FetchRequest");
-
-// }
-
-// Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
-//     : statistics::Group(cpu, "fetch"),
-//     ADD_STAT(predictedBranches, statistics::units::Count::get(),
-//              "Number of branches that fetch has predicted taken"),
-//     ADD_STAT(cycles, statistics::units::Cycle::get(),
-//              "Number of cycles fetch has run and was not squashing or "
-//              "blocked"),
-//     ADD_STAT(squashCycles, statistics::units::Cycle::get(),
-//              "Number of cycles fetch has spent squashing"),
-//     ADD_STAT(tlbCycles, statistics::units::Cycle::get(),
-//              "Number of cycles fetch has spent waiting for tlb"),
-//     ADD_STAT(idleCycles, statistics::units::Cycle::get(),
-//              "Number of cycles fetch was idle"),
-//     ADD_STAT(blockedCycles, statistics::units::Cycle::get(),
-//              "Number of cycles fetch has spent blocked"),
-//     ADD_STAT(miscStallCycles, statistics::units::Cycle::get(),
-//              "Number of cycles fetch has spent waiting on interrupts, or bad "
-//              "addresses, or out of MSHRs"),
-//     ADD_STAT(pendingDrainCycles, statistics::units::Cycle::get(),
-//              "Number of cycles fetch has spent waiting on pipes to drain"),
-//     ADD_STAT(noActiveThreadStallCycles, statistics::units::Cycle::get(),
-//              "Number of stall cycles due to no active thread to fetch from"),
-//     ADD_STAT(pendingTrapStallCycles, statistics::units::Cycle::get(),
-//              "Number of stall cycles due to pending traps"),
-//     ADD_STAT(pendingQuiesceStallCycles, statistics::units::Cycle::get(),
-//              "Number of stall cycles due to pending quiesce instructions"),
-//     ADD_STAT(icacheWaitRetryStallCycles, statistics::units::Cycle::get(),
-//              "Number of stall cycles due to full MSHR"),
-//     ADD_STAT(cacheLines, statistics::units::Count::get(),
-//              "Number of cache lines fetched"),
-//     ADD_STAT(icacheSquashes, statistics::units::Count::get(),
-//              "Number of outstanding Icache misses that were squashed"),
-//     ADD_STAT(tlbSquashes, statistics::units::Count::get(),
-//              "Number of outstanding ITLB misses that were squashed"),
-//     ADD_STAT(nisnDist, statistics::units::Count::get(),
-//              "Number of instructions fetched each cycle (Total)"),
-//     ADD_STAT(idleRate, statistics::units::Ratio::get(),
-//              "Ratio of cycles fetch was idle",
-//              idleCycles / cpu->baseStats.numCycles)
-// {
-//         predictedBranches
-//             .prereq(predictedBranches);
-//         cycles
-//             .prereq(cycles);
-//         squashCycles
-//             .prereq(squashCycles);
-//         tlbCycles
-//             .prereq(tlbCycles);
-//         idleCycles
-//             .prereq(idleCycles);
-//         blockedCycles
-//             .prereq(blockedCycles);
-//         cacheLines
-//             .prereq(cacheLines);
-//         miscStallCycles
-//             .prereq(miscStallCycles);
-//         pendingDrainCycles
-//             .prereq(pendingDrainCycles);
-//         noActiveThreadStallCycles
-//             .prereq(noActiveThreadStallCycles);
-//         pendingTrapStallCycles
-//             .prereq(pendingTrapStallCycles);
-//         pendingQuiesceStallCycles
-//             .prereq(pendingQuiesceStallCycles);
-//         icacheWaitRetryStallCycles
-//             .prereq(icacheWaitRetryStallCycles);
-//         icacheSquashes
-//             .prereq(icacheSquashes);
-//         tlbSquashes
-//             .prereq(tlbSquashes);
-//         nisnDist
-//             .init(/* base value */ 0,
-//               /* last value */ fetch->fetchWidth,
-//               /* bucket size */ 1)
-//             .flags(statistics::pdf);
-//         idleRate
-//             .prereq(idleRate);
-// }
-// void
-// Fetch::setTimeBuffer(TimeBuffer<TimeStruct> *time_buffer)
-// {
-//     timeBuffer = time_buffer;
-
-//     // Create wires to get information from proper places in time buffer.
-//     fromDecode = timeBuffer->getWire(-decodeToFetchDelay);
-//     fromRename = timeBuffer->getWire(-renameToFetchDelay);
-//     fromIEW = timeBuffer->getWire(-iewToFetchDelay);
-//     fromCommit = timeBuffer->getWire(-commitToFetchDelay);
-// }
-
-// void
-// Fetch::setActiveThreads(std::list<ThreadID> *at_ptr)
-// {
-//     activeThreads = at_ptr;
-// }
-
-// void
-// Fetch::setFetchQueue(TimeBuffer<FetchStruct> *ftb_ptr)
-// {
-//     // Create wire to write information to proper place in fetch time buf.
-//     toDecode = ftb_ptr->getWire(0);
-// }
-
-// void
-// Fetch::startupStage()
-// {
-//     assert(priorityList.empty());
-//     resetStage();
-
-//     // Fetch needs to start fetching instructions at the very beginning,
-//     // so it must start up in active state.
-//     switchToActive();
-// }
-
-// void
-// Fetch::clearStates(ThreadID tid)
-// {
-//     fetchStatus[tid] = Running;
-//     set(pc[tid], cpu->pcState(tid));
-//     fetchOffset[tid] = 0;
-//     macroop[tid] = NULL;
-//     delayedCommit[tid] = false;
-//     memReq[tid] = NULL;
-//     stalls[tid].decode = false;
-//     stalls[tid].drain = false;
-//     fetchBufferPC[tid] = 0;
-//     fetchBufferValid[tid] = false;
-//     fetchQueue[tid].clear();
-
-//     // TODO not sure what to do with priorityList for now
-//     // priorityList.push_back(tid);
-// }
-
-// void
-// Fetch::resetStage()
-// {
-//     numInst = 0;
-//     interruptPending = false;
-//     cacheBlocked = false;
-
-//     priorityList.clear();
-
-//     // Setup PC and nextPC with initial state.
-//     for (ThreadID tid = 0; tid < numThreads; ++tid) {
-//         fetchStatus[tid] = Running;
-//         set(pc[tid], cpu->pcState(tid));
-//         fetchOffset[tid] = 0;
-//         macroop[tid] = NULL;
-
-//         delayedCommit[tid] = false;
-//         memReq[tid] = NULL;
-
-//         stalls[tid].decode = false;
-//         stalls[tid].drain = false;
-
-//         fetchBufferPC[tid] = 0;
-//         fetchBufferValid[tid] = false;
-
-//         fetchQueue[tid].clear();
-
-//         priorityList.push_back(tid);
-//     }
-
-//     wroteToTimeBuffer = false;
-//     _status = Inactive;
-// }
-
-// void
-// Fetch::processCacheCompletion(PacketPtr pkt)
-// {
-//     ThreadID tid = cpu->contextToThread(pkt->req->contextId());
-
-//     DPRINTF(Fetch, "[tid:%i] Waking up from cache miss.\n", tid);
-//     assert(!cpu->switchedOut());
-
-//     // Only change the status if it's still waiting on the icache access
-//     // to return.
-//     if (fetchStatus[tid] != IcacheWaitResponse ||
-//         pkt->req != memReq[tid]) {
-//         ++fetchStats.icacheSquashes;
-//         delete pkt;
-//         return;
-//     }
-
-//     memcpy(fetchBuffer[tid], pkt->getConstPtr<uint8_t>(), fetchBufferSize);
-//     fetchBufferValid[tid] = true;
-
-//     // Wake up the CPU (if it went to sleep and was waiting on
-//     // this completion event).
-//     cpu->wakeCPU();
-
-//     DPRINTF(Activity, "[tid:%i] Activating fetch due to cache completion\n",
-//             tid);
-
-//     switchToActive();
-
-//     // Only switch to IcacheAccessComplete if we're not stalled as well.
-//     if (checkStall(tid)) {
-//         fetchStatus[tid] = Blocked;
-//     } else {
-//         fetchStatus[tid] = IcacheAccessComplete;
-//     }
-
-//     pkt->req->setAccessLatency();
-//     cpu->ppInstAccessComplete->notify(pkt);
-//     // Reset the mem req to NULL.
-//     delete pkt;
-//     memReq[tid] = NULL;
-// }
-
-// void
-// Fetch::drainResume()
-// {
-//     for (ThreadID i = 0; i < numThreads; ++i) {
-//         stalls[i].decode = false;
-//         stalls[i].drain = false;
-//     }
-// }
-
-// void
-// Fetch::drainSanityCheck() const
-// {
-//     assert(isDrained());
-//     assert(retryPkt == NULL);
-//     assert(retryTid == InvalidThreadID);
-//     assert(!cacheBlocked);
-//     assert(!interruptPending);
-
-//     for (ThreadID i = 0; i < numThreads; ++i) {
-//         assert(!memReq[i]);
-//         assert(fetchStatus[i] == Idle || stalls[i].drain);
-//     }
-
-//     branchPred->drainSanityCheck();
-// }
 
 // bool
 // Fetch::isDrained() const
@@ -2541,6 +2187,19 @@ decodeJALImmediate(uint32_t inst)
              pipelineIcacheAccesses(i);
          }
      }
+
+     if (pendingSuspendThread != InvalidThreadID) {
+        cpu->suspendContext(pendingSuspendThread);
+        deactivateThread(pendingSuspendThread);
+        fetchStatus[pendingSuspendThread] = Idle;
+        activeThreads->remove(pendingSuspendThread);
+
+        fetchQueue[pendingSuspendThread].clear();
+        memReq[pendingSuspendThread] = nullptr;
+        DPRINTF(Fetch, "[tick] Deactivated thread %d\n", pendingSuspendThread);
+    
+        pendingSuspendThread = InvalidThreadID; // Reset!
+    }
  
      // Send instructions enqueued into the fetch queue to decode.
      // Limit rate by fetchWidth.  Stall if decode is stalled.
@@ -2584,6 +2243,8 @@ decodeJALImmediate(uint32_t inst)
          DPRINTF(Activity, "Activity this cycle.\n");
          cpu->activityThisCycle();
      }
+
+
  
      // Reset the number of the instruction we've fetched.
      numInst = 0;
@@ -2931,7 +2592,7 @@ decodeJALImmediate(uint32_t inst)
             auto* riscvInst = dynamic_cast<RiscvISA::RiscvStaticInst*>(instruction->staticInst.get());
             if (riscvInst) {
                 uint32_t machInst = riscvInst->machInst;
-                if ((machInst & 0x7f) == 0x7B && tid == 0) {
+                if ((machInst & 0x7f) == 0x7B && tid == 0 && pendingSuspendThread == InvalidThreadID && !runaheadTriggered) {
                     Addr pc_addr = instruction->pcState().instAddr();
                     printf("[Main-T%d] Runahead trigger detected! inst: 0x%08x at PC: 0x%08lx\n",
                            tid, machInst, pc_addr);
@@ -2939,22 +2600,28 @@ decodeJALImmediate(uint32_t inst)
                     Addr target = 0x10a7c + 0x28;
                     printf("[Trigger] Calculated runahead target address: 0x%08lx\n", target);
 
-                    cpu->tcBase(1)->pcState(gem5::RiscvISA::PCState(target));
+                    auto* mainCtx = cpu->tcBase(0);
+                    auto* runaheadCtx = cpu->tcBase(1);
+                    *runaheadCtx = *mainCtx;
+                    runaheadCtx->pcState(gem5::RiscvISA::PCState(target));
+
+                    // cpu->tcBase(1)->pcState(gem5::RiscvISA::PCState(target));
                     cpu->activateContext(1);
                     clearStates(1);
                     cpu->thread[1]->lastActivate = curTick();
                     fetchStatus[1] = Running;
                     activeThreads->push_back(1);
                     priorityList.push_back(1);
+
+                    runaheadTriggered = true;
                 }
 
                 if (machInst == 0x0000500f && tid == 1) {
                     printf("[Main-T%d] Runahead END marker found! inst: 0x%08x\n",
                            tid, machInst);
-                    cpu->suspendContext(1);
-                    deactivateThread(1);
-                    activeThreads->remove(1);
-                    DPRINTF(Fetch, "[RunaheadEnd] Deactivated thread 1\n");
+                    pendingSuspendThread = 1;
+
+                    DPRINTF(Fetch, "[RunaheadEnd] Scheduling deactivate of thread 1\n");
                 }
             }
             ///////////////////////////////////////////////
