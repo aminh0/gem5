@@ -327,6 +327,9 @@ class Fetch
     FetchStatus updateFetchStatus();
 
   public:
+
+    bool isRunaheadTriggered() const { return runaheadTriggered; }
+    void clearRunaheadTriggered() { runaheadTriggered = false; }
     /** Squashes a specific thread and resets the PC. Also tells the CPU to
      * remove any instructions that are not in the ROB. The source of this
      * squash should be the commit stage.

@@ -116,6 +116,8 @@ class CPU : public BaseCPU
     /** Overall CPU status. */
     Status _status;
 
+    
+
   private:
 
     /** The tick event used for scheduling CPU ticks. */
@@ -170,6 +172,8 @@ class CPU : public BaseCPU
     bool isCpuDrained() const;
 
   public:
+    IEW& getIEW() { return iew; }
+    ROB& getROB() { return rob; }
     /** Constructs a CPU with the given parameters. */
     CPU(const BaseO3CPUParams &params);
 

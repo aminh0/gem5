@@ -614,6 +614,18 @@ Commit::tick()
 
     commit();
 
+    // if (fetch->isRunaheadTriggered()) {
+    //     if (rob->isEmpty(1) && !thread[1]->trapPending && !iewStage->hasStoresToWB(1)) {
+    //         printf("[Commit] Runahead thread finished. Suspending T1.\n");
+    
+    //         cpu->suspendContext(1);
+    //         fetch->deactivateThread(1);
+    //         fetch->fetchStatus[1] = Idle;
+    //         fetch->activeThreads->remove(1);
+    //         // fetch->clearRunaheadTriggered(); // 꼭 리셋
+    //     }
+    // }
+
     markCompletedInsts();
 
     threads = activeThreads->begin();

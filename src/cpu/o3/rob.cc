@@ -55,6 +55,27 @@ namespace gem5
 namespace o3
 {
 
+void
+ROB::squashAll(ThreadID tid)
+{
+    if (instList[tid].empty())
+        return;
+
+    DPRINTF(Fetch, "[tid:%i] Squashing ALL instructions in ROB.\n", tid);
+
+    instList[tid].clear();
+
+    threadEntries[tid] = 0;
+
+    numInstsInROB = 0;
+    for (ThreadID t = 0; t < numThreads; t++) {
+        numInstsInROB += threadEntries[t];
+    }
+
+    updateHead();
+    updateTail();
+}
+
 ROB::ROB(CPU *_cpu, const BaseO3CPUParams &params)
     : robPolicy(params.smtROBPolicy),
       cpu(_cpu),

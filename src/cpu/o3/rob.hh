@@ -109,6 +109,9 @@ class ROB
     /** Takes over another CPU's thread. */
     void takeOverFrom();
 
+    void squashAll(ThreadID tid);
+
+
     /** Function to insert an instruction into the ROB. Note that whatever
      *  calls this function must ensure that there is enough space within the
      *  ROB for the new instruction.

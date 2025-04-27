@@ -1,373 +1,5 @@
 
 
-// bool
-// Fetch::isDrained() const
-// {
-//     /* Make sure that threads are either idle of that the commit stage
-//      * has signaled that draining has completed by setting the drain
-//      * stall flag. This effectively forces the pipeline to be disabled
-//      * until the whole system is drained (simulation may continue to
-//      * drain other components).
-//      */
-//     for (ThreadID i = 0; i < numThreads; ++i) {
-//         // Verify fetch queues are drained
-//         if (!fetchQueue[i].empty())
-//             return false;
-
-//         // Return false if not idle or drain stalled
-//         if (fetchStatus[i] != Idle) {
-//             if (fetchStatus[i] == Blocked && stalls[i].drain)
-//                 continue;
-//             else
-//                 return false;
-//         }
-//     }
-
-//     /* The pipeline might start up again in the middle of the drain
-//      * cycle if the finish translation event is scheduled, so make
-//      * sure that's not the case.
-//      */
-//     return !finishTranslationEvent.scheduled();
-// }
-
-// void
-// Fetch::takeOverFrom()
-// {
-//     assert(cpu->getInstPort().isConnected());
-//     resetStage();
-
-// }
-
-// void
-// Fetch::drainStall(ThreadID tid)
-// {
-//     assert(cpu->isDraining());
-//     assert(!stalls[tid].drain);
-//     DPRINTF(Drain, "%i: Thread drained.\n", tid);
-//     stalls[tid].drain = true;
-// }
-
-// void
-// Fetch::wakeFromQuiesce()
-// {
-//     DPRINTF(Fetch, "Waking up from quiesce\n");
-//     // Hopefully this is safe
-//     // @todo: Allow other threads to wake from quiesce.
-//     fetchStatus[0] = Running;
-// }
-
-// void
-// Fetch::switchToActive()
-// {
-//     if (_status == Inactive) {
-//         DPRINTF(Activity, "Activating stage.\n");
-
-//         cpu->activateStage(CPU::FetchIdx);
-
-//         _status = Active;
-//     }
-// }
-
-// void
-// Fetch::switchToInactive()
-// {
-//     if (_status == Active) {
-//         DPRINTF(Activity, "Deactivating stage.\n");
-
-//         cpu->deactivateStage(CPU::FetchIdx);
-
-//         _status = Inactive;
-//     }
-// }
-
-// void
-// Fetch::deactivateThread(ThreadID tid)
-// {
-//     // Update priority list
-//     auto thread_it = std::find(priorityList.begin(), priorityList.end(), tid);
-//     if (thread_it != priorityList.end()) {
-//         priorityList.erase(thread_it);
-//     }
-// }
-
-// bool
-// Fetch::lookupAndUpdateNextPC(const DynInstPtr &inst, PCStateBase &next_pc)
-// {
-//     // Do branch prediction check here.
-//     // A bit of a misnomer...next_PC is actually the current PC until
-//     // this function updates it.
-//     bool predict_taken;
-
-//     if (!inst->isControl()) {
-//         inst->staticInst->advancePC(next_pc);
-//         inst->setPredTarg(next_pc);
-//         inst->setPredTaken(false);
-//         return false;
-//     }
-
-//     ThreadID tid = inst->threadNumber;
-//     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
-//                                         next_pc, tid);
-
-//     if (predict_taken) {
-//         DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
-//                 "predicted to be taken to %s\n",
-//                 tid, inst->seqNum, inst->pcState().instAddr(), next_pc);
-//     } else {
-//         DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
-//                 "predicted to be not taken\n",
-//                 tid, inst->seqNum, inst->pcState().instAddr());
-//     }
-
-//     DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
-//             "predicted to go to %s\n",
-//             tid, inst->seqNum, inst->pcState().instAddr(), next_pc);
-//     inst->setPredTarg(next_pc);
-//     inst->setPredTaken(predict_taken);
-
-//     cpu->fetchStats[tid]->numBranches++;
-
-//     if (predict_taken) {
-//         ++fetchStats.predictedBranches;
-//     }
-
-//     return predict_taken;
-// }
-
-// bool
-// Fetch::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
-// {
-//     Fault fault = NoFault;
-
-//     assert(!cpu->switchedOut());
-
-//     // @todo: not sure if these should block translation.
-//     //AlphaDep
-//     if (cacheBlocked) {
-//         DPRINTF(Fetch, "[tid:%i] Can't fetch cache line, cache blocked\n",
-//                 tid);
-//         return false;
-//     } else if (checkInterrupt(pc) && !delayedCommit[tid]) {
-//         // Hold off fetch from getting new instructions when:
-//         // Cache is blocked, or
-//         // while an interrupt is pending and we're not in PAL mode, or
-//         // fetch is switched out.
-//         DPRINTF(Fetch, "[tid:%i] Can't fetch cache line, interrupt pending\n",
-//                 tid);
-//         return false;
-//     }
-
-//     // Align the fetch address to the start of a fetch buffer segment.
-//     Addr fetchBufferBlockPC = fetchBufferAlignPC(vaddr);
-
-//     DPRINTF(Fetch, "[tid:%i] Fetching cache line %#x for addr %#x\n",
-//             tid, fetchBufferBlockPC, vaddr);
-
-//     // Setup the memReq to do a read of the first instruction's address.
-//     // Set the appropriate read size and flags as well.
-//     // Build request here.
-//     RequestPtr mem_req = std::make_shared<Request>(
-//         fetchBufferBlockPC, fetchBufferSize,
-//         Request::INST_FETCH, cpu->instRequestorId(), pc,
-//         cpu->thread[tid]->contextId());
-
-//     mem_req->taskId(cpu->taskId());
-
-//     memReq[tid] = mem_req;
-
-//     // Initiate translation of the icache block
-//     fetchStatus[tid] = ItlbWait;
-//     FetchTranslation *trans = new FetchTranslation(this);
-//     cpu->mmu->translateTiming(mem_req, cpu->thread[tid]->getTC(),
-//                               trans, BaseMMU::Execute);
-//     return true;
-// }
-
-// void
-// Fetch::finishTranslation(const Fault &fault, const RequestPtr &mem_req)
-// {
-//     ThreadID tid = cpu->contextToThread(mem_req->contextId());
-//     Addr fetchBufferBlockPC = mem_req->getVaddr();
-
-//     assert(!cpu->switchedOut());
-
-//     // Wake up CPU if it was idle
-//     cpu->wakeCPU();
-
-//     if (fetchStatus[tid] != ItlbWait || mem_req != memReq[tid] ||
-//         mem_req->getVaddr() != memReq[tid]->getVaddr()) {
-//         DPRINTF(Fetch, "[tid:%i] Ignoring itlb completed after squash\n",
-//                 tid);
-//         ++fetchStats.tlbSquashes;
-//         return;
-//     }
-
-
-//     // If translation was successful, attempt to read the icache block.
-//     if (fault == NoFault) {
-//         // Check that we're not going off into random memory
-//         // If we have, just wait around for commit to squash something and put
-//         // us on the right track
-//         if (!cpu->system->isMemAddr(mem_req->getPaddr())) {
-//             warn("Address %#x is outside of physical memory, stopping fetch\n",
-//                     mem_req->getPaddr());
-//             fetchStatus[tid] = NoGoodAddr;
-//             memReq[tid] = NULL;
-//             return;
-//         }
-
-//         // Build packet here.
-//         PacketPtr data_pkt = new Packet(mem_req, MemCmd::ReadReq);
-//         data_pkt->dataDynamic(new uint8_t[fetchBufferSize]);
-
-//         fetchBufferPC[tid] = fetchBufferBlockPC;
-//         fetchBufferValid[tid] = false;
-//         DPRINTF(Fetch, "Fetch: Doing instruction read.\n");
-
-//         fetchStats.cacheLines++;
-
-//         // Access the cache.
-//         if (!icachePort.sendTimingReq(data_pkt)) {
-//             assert(retryPkt == NULL);
-//             assert(retryTid == InvalidThreadID);
-//             DPRINTF(Fetch, "[tid:%i] Out of MSHRs!\n", tid);
-
-//             fetchStatus[tid] = IcacheWaitRetry;
-//             retryPkt = data_pkt;
-//             retryTid = tid;
-//             cacheBlocked = true;
-//         } else {
-//             DPRINTF(Fetch, "[tid:%i] Doing Icache access.\n", tid);
-//             DPRINTF(Activity, "[tid:%i] Activity: Waiting on I-cache "
-//                     "response.\n", tid);
-//             lastIcacheStall[tid] = curTick();
-//             fetchStatus[tid] = IcacheWaitResponse;
-//             // Notify Fetch Request probe when a packet containing a fetch
-//             // request is successfully sent
-//             ppFetchRequestSent->notify(mem_req);
-//         }
-//     } else {
-//         // Don't send an instruction to decode if we can't handle it.
-//         if (!(numInst < fetchWidth) ||
-//                 !(fetchQueue[tid].size() < fetchQueueSize)) {
-//             assert(!finishTranslationEvent.scheduled());
-//             finishTranslationEvent.setFault(fault);
-//             finishTranslationEvent.setReq(mem_req);
-//             cpu->schedule(finishTranslationEvent,
-//                           cpu->clockEdge(Cycles(1)));
-//             return;
-//         }
-//         DPRINTF(Fetch,
-//                 "[tid:%i] Got back req with addr %#x but expected %#x\n",
-//                 tid, mem_req->getVaddr(), memReq[tid]->getVaddr());
-//         // Translation faulted, icache request won't be sent.
-//         memReq[tid] = NULL;
-
-//         // Send the fault to commit.  This thread will not do anything
-//         // until commit handles the fault.  The only other way it can
-//         // wake up is if a squash comes along and changes the PC.
-//         const PCStateBase &fetch_pc = *pc[tid];
-
-//         DPRINTF(Fetch, "[tid:%i] Translation faulted, building noop.\n", tid);
-//         // We will use a nop in ordier to carry the fault.
-//         DynInstPtr instruction = buildInst(tid, nopStaticInstPtr, nullptr,
-//                 fetch_pc, fetch_pc, false);
-//         instruction->setNotAnInst();
-
-//         instruction->setPredTarg(fetch_pc);
-//         instruction->fault = fault;
-//         wroteToTimeBuffer = true;
-
-//         DPRINTF(Activity, "Activity this cycle.\n");
-//         cpu->activityThisCycle();
-
-//         fetchStatus[tid] = TrapPending;
-
-//         DPRINTF(Fetch, "[tid:%i] Blocked, need to handle the trap.\n", tid);
-//         DPRINTF(Fetch, "[tid:%i] fault (%s) detected @ PC %s.\n",
-//                 tid, fault->name(), *pc[tid]);
-//     }
-//     _status = updateFetchStatus();
-// }
-
-// void
-// Fetch::doSquash(const PCStateBase &new_pc, const DynInstPtr squashInst,
-//         ThreadID tid)
-// {
-//     DPRINTF(Fetch, "[tid:%i] Squashing, setting PC to: %s.\n",
-//             tid, new_pc);
-
-//     set(pc[tid], new_pc);
-//     fetchOffset[tid] = 0;
-//     if (squashInst && squashInst->pcState().instAddr() == new_pc.instAddr() &&
-//         !squashInst->isLastMicroop())
-//         macroop[tid] = squashInst->macroop;
-//     else
-//         macroop[tid] = NULL;
-//     decoder[tid]->reset();
-
-//     // Clear the icache miss if it's outstanding.
-//     if (fetchStatus[tid] == IcacheWaitResponse) {
-//         DPRINTF(Fetch, "[tid:%i] Squashing outstanding Icache miss.\n",
-//                 tid);
-//         memReq[tid] = NULL;
-//     } else if (fetchStatus[tid] == ItlbWait) {
-//         DPRINTF(Fetch, "[tid:%i] Squashing outstanding ITLB miss.\n",
-//                 tid);
-//         memReq[tid] = NULL;
-//     }
-
-//     // Get rid of the retrying packet if it was from this thread.
-//     if (retryTid == tid) {
-//         assert(cacheBlocked);
-//         if (retryPkt) {
-//             delete retryPkt;
-//         }
-//         retryPkt = NULL;
-//         retryTid = InvalidThreadID;
-//     }
-
-//     fetchStatus[tid] = Squashing;
-
-//     // Empty fetch queue
-//     fetchQueue[tid].clear();
-
-//     // microops are being squashed, it is not known wheather the
-//     // youngest non-squashed microop was  marked delayed commit
-//     // or not. Setting the flag to true ensures that the
-//     // interrupts are not handled when they cannot be, though
-//     // some opportunities to handle interrupts may be missed.
-//     delayedCommit[tid] = true;
-
-//     ++fetchStats.squashCycles;
-// }
-
-// void
-// Fetch::squashFromDecode(const PCStateBase &new_pc, const DynInstPtr squashInst,
-//         const InstSeqNum seq_num, ThreadID tid)
-// {
-//     DPRINTF(Fetch, "[tid:%i] Squashing from decode.\n", tid);
-
-//     doSquash(new_pc, squashInst, tid);
-
-//     // Tell the CPU to remove any instructions that are in flight between
-//     // fetch and decode.
-//     cpu->removeInstsUntil(seq_num, tid);
-// }
-
-// bool
-// Fetch::checkStall(ThreadID tid) const
-// {
-//     bool ret_val = false;
-
-//     if (stalls[tid].drain) {
-//         assert(cpu->isDraining());
-//         DPRINTF(Fetch,"[tid:%i] Drain stall detected.\n",tid);
-//         ret_val = true;
-//     }
-
-//     return ret_val;
-// }
 
 // Fetch::FetchStatus
 // Fetch::updateFetchStatus()
@@ -1371,6 +1003,7 @@
  #include "sim/full_system.hh"
  #include "sim/system.hh"
 
+ #include "sim/simulate.hh"
  #include "arch/riscv/insts/static_inst.hh"
  
  namespace gem5
@@ -2197,8 +1830,13 @@ decodeJALImmediate(uint32_t inst)
         fetchQueue[pendingSuspendThread].clear();
         memReq[pendingSuspendThread] = nullptr;
         DPRINTF(Fetch, "[tick] Deactivated thread %d\n", pendingSuspendThread);
-    
+        cpu->getIEW().squash(1);
+        cpu->getIEW().ldstQueue.squash(fromCommit->commitInfo[1].doneSeqNum, 1);
+        
+        cpu->getROB().squashAll(1);
+
         pendingSuspendThread = InvalidThreadID; // Reset!
+
     }
  
      // Send instructions enqueued into the fetch queue to decode.
@@ -2597,13 +2235,13 @@ decodeJALImmediate(uint32_t inst)
                     printf("[Main-T%d] Runahead trigger detected! inst: 0x%08x at PC: 0x%08lx\n",
                            tid, machInst, pc_addr);
 
-                    Addr target = 0x10a7c + 0x28;
+                    Addr target = pc_addr + 0x28;
                     printf("[Trigger] Calculated runahead target address: 0x%08lx\n", target);
 
                     auto* mainCtx = cpu->tcBase(0);
                     auto* runaheadCtx = cpu->tcBase(1);
                     *runaheadCtx = *mainCtx;
-                    runaheadCtx->pcState(gem5::RiscvISA::PCState(target));
+                    runaheadCtx->pcState(gem5::RiscvISA::PCState(target));  
 
                     // cpu->tcBase(1)->pcState(gem5::RiscvISA::PCState(target));
                     cpu->activateContext(1);
