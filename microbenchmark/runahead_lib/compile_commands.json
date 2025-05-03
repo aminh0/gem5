@@ -1,0 +1,36 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/clang-19",
+      "-fno-discard-value-names",
+      "-emit-llvm",
+      "-target",
+      "riscv64",
+      "-S",
+      "-O1",
+      "-o",
+      "array1.ll",
+      "array1.c"
+    ],
+    "directory": "/home/suhipek/Documents/18742-compiler/test_lib",
+    "file": "/home/suhipek/Documents/18742-compiler/test_lib/array1.c",
+    "output": "/home/suhipek/Documents/18742-compiler/test_lib/array1.ll"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang-19",
+      "-fno-discard-value-names",
+      "-emit-llvm",
+      "-target",
+      "riscv64",
+      "-S",
+      "-O1",
+      "-o",
+      "fibo1.ll",
+      "fibo1.c"
+    ],
+    "directory": "/home/suhipek/Documents/18742-compiler/test_lib",
+    "file": "/home/suhipek/Documents/18742-compiler/test_lib/fibo1.c",
+    "output": "/home/suhipek/Documents/18742-compiler/test_lib/fibo1.ll"
+  }
+]
